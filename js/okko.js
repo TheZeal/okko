@@ -50,13 +50,78 @@ enemy =
             x:8,
             y:10.5
         },
-        direction : 180,
+        direction : 450,
         speed : 0.1
     } 
 ]
-bullets=
+enemy = []
+
+bullets = []
+
+particles = []
+canon =
 [
+    {
+        coords :
+        {
+            x:11,
+            y:10
+        },
+        direction : 45,
+        reloadRate : 20,
+        reloadTick : 0,
+        damage : 50
+    },
+    {
+        coords :
+        {
+            x:10,
+            y:9
+        },
+        direction : 45,
+        reloadRate : 20,
+        reloadTick : 0,
+        damage : 50
+    },
+    {
+        coords :
+        {
+            x:9,
+            y:10
+        },
+        direction : 45,
+        reloadRate : 20,
+        reloadTick : 0,
+        damage : 50
+    },
+    {
+        coords :
+        {
+            x:10,
+            y:11
+        },
+        direction : 45,
+        reloadRate : 20,
+        reloadTick : 0,
+        damage : 50
+    }
 ]
+radar = 
+[
+    {
+        coords :
+        {
+            x:10,
+            y:10
+        }
+    },
+
+]
+
+
+
+
+
 function createBattlefield(x,y)
 {
     var map = [];
@@ -125,13 +190,38 @@ function affBattlefield()
         ctx.fillStyle="black"; 
         ctx.fill();
     }
+    for(var i=0;i!=canon.length;i++)
+    {
+        ctx.beginPath();
+        ctx.rect(canon[i].coords.x*40+6,canon[i].coords.y*40+6,30-2,30-2);
+        ctx.fillStyle="green"; 
+        ctx.fill();
+        ctx.beginPath();
+        ctx.rect(canon[i].coords.x*40+15+8*Math.cos(canon[i].direction/180*Math.PI),canon[i].coords.y*40+15+8*Math.sin(canon[i].direction/180*Math.PI),10,10);
+        ctx.fillStyle="black"; 
+        ctx.fill();
+    }
+    for(var i=0;i!=radar.length;i++)
+    {
+        ctx.beginPath();
+        ctx.rect(radar[i].coords.x*40+6,radar[i].coords.y*40+6,30-2,30-2);
+        ctx.fillStyle="blue"; 
+        ctx.fill();
+    }
     for(var i=0;i!=bullets.length;i++)
     {
         ctx.beginPath();
         ctx.rect(bullets[i].coords.x*40+16,bullets[i].coords.y*40+16,8,8);
-        ctx.fillStyle="grey"; 
+        ctx.fillStyle="black"; 
         ctx.fill();
-    }  
+    } 
+    for(var i=0;i!=particles.length;i++)
+    {
+        ctx.beginPath();
+        ctx.rect(particles[i].coords.x*40+18,particles[i].coords.y*40+18,4,4);
+        ctx.fillStyle=particles[i].color; 
+        ctx.fill();
+    } 
     ctx.beginPath();
     ctx.rect(cursor.coords.x*40+6,cursor.coords.y*40+6,30-2,30-2);
     ctx.fillStyle="green"; 
@@ -167,12 +257,29 @@ function moveBullets()
     }
 }
 
+function moveParticles()
+{
+    for(var i=0;i!=particles.length;i++)
+    {
+        particles[i].coords.x += Math.cos(particles[i].direction/180*Math.PI)*particles[i].speed;
+        particles[i].coords.y += Math.sin(particles[i].direction/180*Math.PI)*particles[i].speed;
+        particles[i].lifespan--
+    }
+    for(var i=particles.length-1;i>=0;i--)
+    {   
+        if(particles[i].coords.x<-0.5 || particles[i].coords.x>20.5 ||  particles[i].coords.y<-0.5 ||  particles[i].coords.y>20.5 || particles[i].lifespan<=0)
+        {
+            particles.splice(i,1)
+        }
+    }
+}
+
 function spawnEnemies()
 {
-    while (Math.random()<0.01)
+    while (Math.random()<0.05)
     {
-        var x = Math.random()*21;
-        var y = Math.random()<0.5?0:21;
+        var x = Math.random()*20;
+        var y = Math.random()<0.5?0:20;
         if(Math.random()<0.5)
         {
             var tmp = x;
@@ -197,8 +304,8 @@ function spawnEnemies()
     }
 } 
 
-/// NEEDS TO BE REMOVED LATER
-function spawnBullets()
+/// NEEDS TO BE REMOVED LATER ///
+function spawnBullets_old()
 {
     while (Math.random()<0.1)
     {
@@ -219,10 +326,113 @@ function spawnBullets()
             }
         )
     }
-}    
+}
 
+function findNearestEnemy(x,y)
+{
+    var target = -1;
+    var targetDistance = 1000;
+    var distanceToThisEnemy;
+    for(var i=0;i<enemy.length;i++)
+    {    
+        distanceToThisEnemy = Math.sqrt(Math.pow(enemy[i].coords.x-x,2)+Math.pow(enemy[i].coords.y-y,2));
+        if(distanceToThisEnemy<targetDistance)
+        {
+            target = i;
+            targetDistance = distanceToThisEnemy;
+        }
+    }
+    return target;
+}
 
+function spawnBullets()
+{
+    for(var i=0;i!=canon.length;i++)
+    {
+        canon[i].reloadTick--
+        for(var j=0;j!=radar.length;j++)
+        {
+            if(canon[i].coords.x+canon[i].coords.y-(radar[j].coords.x+radar[j].coords.y)<=1 && enemy.length>0)
+            {
+                target = findNearestEnemy(canon[i].coords.x,canon[i].coords.y)
+                canon[i].direction = (180+Math.atan2(canon[i].coords.y-enemy[target].coords.y-0.35,canon[i].coords.x-enemy[target].coords.x-0.35)/Math.PI*180)%360
+            }
+        }
+        if(canon[i].reloadTick<=0 && enemy.length>0)
+        {
+            canon[i].reloadTick = canon[i].reloadRate
+            //canon[i].direction=(canon[i].direction+45)%360
+            var direction = canon[i].direction;
+            var damage = canon[i].damage
+            var speed = 0.2;
+            bullets.push(
+            {
+            coords :
+            {
+                x:canon[i].coords.x,
+                y:canon[i].coords.y
+            },
+            direction:direction ,
+            speed : speed,
+            damage : damage
+            }
+            )
+        }
+    }
+}  
 
+function renderBulletsCollision()
+{
+    if(bullets.length!=0)
+    {
+        for(var i=enemy.length-1;i>=0;i--)
+        {
+            for(var j = bullets.length-1;j>=0;j--)
+            { 
+                if(((bullets[j].coords.x>enemy[i].coords.x && bullets[j].coords.x<enemy[i].coords.x+0.7) || (bullets[j].coords.x+0.2>enemy[i].coords.x && bullets[j].coords.x+0.2<enemy[i].coords.x+0.8)) && ((bullets[j].coords.y>enemy[i].coords.y && bullets[j].coords.y<enemy[i].coords.y+0.8) || (bullets[j].coords.y+0.2>enemy[i].coords.y && bullets[j].coords.y+0.2<enemy[i].coords.y+0.8)))
+                {
+                    enemy[i].hp-=bullets[j].damage
+                    bullets.splice(j,1)
+                    if(enemy[i].hp<=0 )
+                    {   
+                        for(var k=0;k<Math.random()*2+1;k++)
+                            particles.push(
+                            {
+                            coords :
+                            {
+                                x:enemy[i].coords.x,
+                                y:enemy[i].coords.y
+                            },
+                            direction:Math.floor(Math.random()*360),
+                            speed : 0.05,
+                            color : "red",
+                            lifespan : 10+Math.floor(Math.random()*10)
+                            }
+                            )
+                        //: ARGH. PUT THIS IN A PROPER FUNCTION PLEASE //
+                        particles.push(
+                            {
+                            coords :
+                            {
+                                x:enemy[i].coords.x,
+                                y:enemy[i].coords.y
+                            },
+                            direction:Math.floor(Math.random()*360),
+                            speed : 0.05,
+                            color : "black",
+                            lifespan : 40+Math.floor(Math.random()*10)
+                            }
+                            )
+                        enemy.splice(i,1)
+                        i--
+                        if(i<0)
+                            break;
+                    }
+                }
+            }
+        }
+    }
+}
 
 function mainLoop()
 {
@@ -230,6 +440,8 @@ function mainLoop()
     spawnBullets();
     moveEnemies();
     moveBullets();
+    moveParticles();
+    renderBulletsCollision()
     affBattlefield();
     requestID = window.requestAnimationFrame(mainLoop);
 }
