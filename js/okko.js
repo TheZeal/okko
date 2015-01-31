@@ -13,9 +13,12 @@ var battlefieldYSize = 21;
 var unitSelected = -1;
 document.onkeydown = checkKey;
 
+var zones = 
+{
+    crux : [0,0,-1,0,1,0,0,-1,0,1,5,5]
+};
 
-
-
+var started = 0
 
 battlefield = createBattlefield(21,21)
 
@@ -25,8 +28,8 @@ cursor =
     {
         x:0,
         y:0
-    }
-
+    },
+    currentlyHolded : "radar"
 }
 
 enemy = 
@@ -106,22 +109,23 @@ canon =
         damage : 50
     }
 ]
-
+battlefield[10][11].isSolid=1
+battlefield[11][10].isSolid=1
+battlefield[10][9].isSolid=1
+battlefield[9][10].isSolid=1
 radar = 
 [
-    {
-        coords :
-        {
-            x:10,
-            y:10
-        }
-    },
 
 ]
 
-radar =[]
-
-
+buildingDescription =
+{
+    radar :     
+    {
+        color : "blue",
+        pattern : zones.crux
+    }
+}
 
 
 function createBattlefield(x,y)
@@ -142,6 +146,19 @@ function createBattlefield(x,y)
     }
     map[10][10]=1
     return map;
+}
+
+function makeBulidingAOE(x, y, zone )
+{
+    var whatToPaint = []
+    for (i=0;i<zone.length;i+=2)
+    {
+        x0 = x+zone[i];
+        y0 = y+zone[i+1];
+        if (x>=0 && x<=20 && y>=0 && y<=20)
+            whatToPaint.push([x0,y0]);
+    }
+    return whatToPaint;
 }
 
 function affBattlefield()
@@ -171,6 +188,14 @@ function affBattlefield()
                 ctx.fill();
             }
         };
+    }
+    target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,buildingDescription[cursor.currentlyHolded].pattern)
+    for(var i=0;i!=target.length;i++)
+    {
+        ctx.beginPath();
+        ctx.rect(target[i][0]*40,target[i][1]*40,40,40);
+        ctx.fillStyle="rgba(211, 211, 211, 0.8)"
+        ctx.fill();
     }
     for(var i=0;i!=enemy.length;i++)
     {
@@ -218,11 +243,27 @@ function affBattlefield()
         ctx.fillStyle=particles[i].color; 
         ctx.fill();
         /// FIX IT UNTIL YOU MAKE IT
-    } 
+    }
+
     ctx.beginPath();
     ctx.rect(cursor.coords.x*40+6,cursor.coords.y*40+6,30-2,30-2);
-    ctx.fillStyle="green"; 
+    ctx.fillStyle=buildingDescription[cursor.currentlyHolded].color; 
     ctx.fill();
+    // fix later aka now
+    if(battlefield[cursor.coords.x][cursor.coords.y].isSolid == 1)
+    {
+        ctx.beginPath();
+        ctx.moveTo(cursor.coords.x*40,cursor.coords.y*40)
+        ctx.lineTo(cursor.coords.x*40,cursor.coords.y*40+40);
+        ctx.lineTo(cursor.coords.x*40+40,cursor.coords.y*40+40);
+        ctx.lineTo(cursor.coords.x*40+40,cursor.coords.y*40);
+        ctx.lineTo(cursor.coords.x*40,cursor.coords.y*40)
+        ctx.strokeStyle="red";
+        ctx.lineWidth = 5;
+        ctx.stroke();
+    }
+
+
 }
 
 function moveEnemies()
@@ -273,7 +314,7 @@ function moveParticles()
 
 function spawnEnemies()
 {
-    while (Math.random()<0.15)
+    while (Math.random()<0.15 && started==1)
     {
         var x = Math.random()*20;
         var y = Math.random()<0.5?0:20;
@@ -424,9 +465,9 @@ function renderBulletsCollision()
                                 y:enemy[i].coords.y
                             },
                             direction:(enemy[i].direction-15+Math.floor(Math.random()*30)+360)%360,
-                            speed : 0.05,
+                            speed : 0.01,
                             color : "black",
-                            lifespan : 40+Math.floor(Math.random()*10)
+                            lifespan : 10+Math.floor(Math.random()*10)
                         }
                         )
                         enemy.splice(i,1)
@@ -440,14 +481,20 @@ function renderBulletsCollision()
     }
 }
 
+function place( item, x, y, zone )
+{
+    for (i=0;i<zone.length;i+=2)
+    {
+        x0 = x+zone[i];
+        y0 = y+zone[i+1];
+        if (x>=0 && x<=20 && y>=0 && y<=20)
+            battlefield[x0][y0][item] = 1;
+    }
+}
+
 function placeRadar(x,y)
 {
-    battlefield[x][y].isRadar=1;
-    battlefield[Math.max(x-1,0)][y].poweredByRadar=1;
-    battlefield[x][Math.max(y-1,0)].poweredByRadar=1;
-    battlefield[Math.min(x+1,20)][y].poweredByRadar=1;
-    battlefield[x][Math.min(y+1,20)].poweredByRadar=1;
-    battlefield[x][y].poweredByRadar=1;
+    place( "poweredByRadar", 10, 10, zones.crux );
     radar.push(
     {
         coords :
@@ -457,6 +504,7 @@ function placeRadar(x,y)
         }
     }
     )
+    console.log("doned")
 }
 function mainLoop()
 {
@@ -515,6 +563,11 @@ function checkKey(e) {
     {
         placeRadar(cursor.coords.x,cursor.coords.y);
     }
+    else if (e.keyCode == '76')
+    {
+        started=1;
+    }
+
 
     //affBattlefield()
 }
