@@ -1,8 +1,3 @@
-/*
-1 : type
-2:
-*/
-
 var SIZEOFBOARD = 840
 
 var c=document.getElementById("board");
@@ -15,11 +10,14 @@ document.onkeydown = checkKey;
 
 var zones = 
 {
-    crux : [0,0,-1,0,1,0,0,-1,0,1,5,5]
+    dot : [0,0],
+    crux : [0,0,-1,0,1,0,0,-1,0,1],
+    radius3 : [0,-2,1,1,2,0,1,-1,0,2,-1,1,-2,0,-1,-1]
 };
 
 var started = 0
-
+var testmode = 0
+var tick = 0;
 battlefield = createBattlefield(21,21)
 
 cursor =
@@ -113,17 +111,15 @@ battlefield[10][11].isSolid=1
 battlefield[11][10].isSolid=1
 battlefield[10][9].isSolid=1
 battlefield[9][10].isSolid=1
-radar = 
-[
 
-]
 
 buildingDescription =
 {
     radar :     
     {
+        buildingPattern : zones.crux,
         color : "blue",
-        pattern : zones.crux
+        actionPattern : zones.radius3
     }
 }
 
@@ -155,7 +151,7 @@ function makeBulidingAOE(x, y, zone )
     {
         x0 = x+zone[i];
         y0 = y+zone[i+1];
-        if (x>=0 && x<=20 && y>=0 && y<=20)
+        if (x0>=0 && x0<=20 && y0>=0 && y0<=20)
             whatToPaint.push([x0,y0]);
     }
     return whatToPaint;
@@ -187,14 +183,21 @@ function affBattlefield()
                 ctx.fillStyle="grey"; 
                 ctx.fill();
             }
-        };
+            if(battlefield[j][i].isRadar==1)
+            {
+                ctx.beginPath();
+                ctx.rect(j*40+6,i*40+6,30-2,30-2);
+                ctx.fillStyle="blue"; 
+                ctx.fill();
+            }
+        }
     }
-    target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,buildingDescription[cursor.currentlyHolded].pattern)
+    target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,buildingDescription[cursor.currentlyHolded].actionPattern)
     for(var i=0;i!=target.length;i++)
     {
         ctx.beginPath();
         ctx.rect(target[i][0]*40,target[i][1]*40,40,40);
-        ctx.fillStyle="rgba(211, 211, 211, 0.8)"
+        ctx.fillStyle="rgba(220, 20, 60, "+((tick%50)/200+0.5)+")" // 211 211 211
         ctx.fill();
     }
     for(var i=0;i!=enemy.length;i++)
@@ -219,13 +222,18 @@ function affBattlefield()
         ctx.fillStyle="black"; 
         ctx.fill();
     }
-    for(var i=0;i!=radar.length;i++)
-    {
-        ctx.beginPath();
-        ctx.rect(radar[i].coords.x*40+6,radar[i].coords.y*40+6,30-2,30-2);
-        ctx.fillStyle="blue"; 
-        ctx.fill();
-    }
+    //for(var i=0;i!=radar.length;i++)
+    //    for(var j=0;j!=radar.length;j++)
+    //    {
+    //        if(Math.sqrt(Math.pow(radar[i].coords.x,2)+Math.pow(radar[i].coords.y,2)-(Math.pow(radar[j].coords.x,2)+Math.pow(radar[j].coords.y,2)))<=1)
+    //        {
+    //            ctx.beginPath();
+    //            ctx.rect(radar[i].coords.x*40+6,radar[i].coords.y*40+6,30-2,30-2);
+    //            ctx.fillStyle="blue"; 
+    //            ctx.fill();
+    //        }
+    //    }
+
     for(var i=0;i!=bullets.length;i++)
     {
         ctx.beginPath();
@@ -249,21 +257,26 @@ function affBattlefield()
     ctx.rect(cursor.coords.x*40+6,cursor.coords.y*40+6,30-2,30-2);
     ctx.fillStyle=buildingDescription[cursor.currentlyHolded].color; 
     ctx.fill();
-    // fix later aka now
-    if(battlefield[cursor.coords.x][cursor.coords.y].isSolid == 1)
+    target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,buildingDescription[cursor.currentlyHolded].buildingPattern)
+    for(var i =0;i!=target.length;i++)
     {
-        ctx.beginPath();
-        ctx.moveTo(cursor.coords.x*40,cursor.coords.y*40)
-        ctx.lineTo(cursor.coords.x*40,cursor.coords.y*40+40);
-        ctx.lineTo(cursor.coords.x*40+40,cursor.coords.y*40+40);
-        ctx.lineTo(cursor.coords.x*40+40,cursor.coords.y*40);
-        ctx.lineTo(cursor.coords.x*40,cursor.coords.y*40)
-        ctx.strokeStyle="red";
-        ctx.lineWidth = 5;
-        ctx.stroke();
+        if(battlefield[target[i][0]][target[i][1]].isSolid == 1)
+        {
+            for(var j =0;j!=target.length;j++)
+            {
+                ctx.beginPath();
+                ctx.moveTo(target[j][0]*40,target[j][1]*40)
+                ctx.lineTo(target[j][0]*40,target[j][1]*40+40);
+                ctx.lineTo(target[j][0]*40+40,target[j][1]*40+40);
+                ctx.lineTo(target[j][0]*40+40,target[j][1]*40);
+                ctx.lineTo(target[j][0]*40,target[j][1]*40)
+                ctx.strokeStyle="red";
+                ctx.lineWidth = 5;
+                ctx.stroke();
+            }
+            break;
+        }
     }
-
-
 }
 
 function moveEnemies()
@@ -339,6 +352,23 @@ function spawnEnemies()
             speed : speed
             }
         )
+    }
+    if(testmode==1)
+    {
+        enemy.push(
+        {        
+            name : "justspawned",
+            hp:1e+10,
+            coords :
+            {
+                x:5,
+                y:5
+            },
+            direction:0 ,
+            speed : 0
+            }
+        )
+        testmode = 0
     }
 } 
 
@@ -457,6 +487,7 @@ function renderBulletsCollision()
                         }
                         )
                         //: ARGH. PUT THIS IN A PROPER FUNCTION PLEASE //
+                        // WILL DO... LATER.
                         particles.push(
                         {
                             coords :
@@ -487,27 +518,23 @@ function place( item, x, y, zone )
     {
         x0 = x+zone[i];
         y0 = y+zone[i+1];
-        if (x>=0 && x<=20 && y>=0 && y<=20)
+        if (x0>=0 && x0<=20 && y0>=0 && y0<=20)
             battlefield[x0][y0][item] = 1;
+        console.log("Property placed")
+        console.log(x0,y0)
     }
 }
 
 function placeRadar(x,y)
 {
-    place( "poweredByRadar", 10, 10, zones.crux );
-    radar.push(
-    {
-        coords :
-        {
-            x:cursor.coords.x,
-            y:cursor.coords.y
-        }
-    }
-    )
+    place( "poweredByRadar", cursor.coords.x,cursor.coords.y, buildingDescription.radar.actionPattern );
+    place("isRadar", cursor.coords.x,cursor.coords.y, buildingDescription.radar.buildingPattern )
+    place("isSolid", cursor.coords.x,cursor.coords.y, buildingDescription.radar.buildingPattern )
     console.log("doned")
 }
 function mainLoop()
 {
+    tick++;
     spawnEnemies();
     moveCanons()
     spawnBullets();
@@ -566,6 +593,10 @@ function checkKey(e) {
     else if (e.keyCode == '76')
     {
         started=1;
+    }
+    else if (e.keyCode == '84')
+    {
+        testmode=1;
     }
 
 
