@@ -12,23 +12,14 @@ var zones =
 {
     dot : [0,0],
     crux : [0,0,-1,0,1,0,0,-1,0,1],
-    radius3 : [0,-2,1,1,2,0,1,-1,0,2,-1,1,-2,0,-1,-1]
+    radius3 : [0,-2,1,1,2,0,1,-1,0,2,-1,1,-2,0,-1,-1],
+    crymson : [3,0,2,2,0,3,0,-3,-3,0,-2,-2,2,-2,-2,2]
 };
 
 var started = 0
 var testmode = 0
 var tick = 0;
 battlefield = createBattlefield(21,21)
-
-cursor =
-{
-    coords :
-    {
-        x:0,
-        y:0
-    },
-    currentlyHolded : "radar"
-}
 
 enemy = 
 [
@@ -51,7 +42,7 @@ enemy =
             x:8,
             y:10.5
         },
-        direction : 450,
+        direction : 45,
         speed : 0.1
     } 
 ]
@@ -60,69 +51,101 @@ enemy = []
 bullets = []
 
 particles = []
-canon =
-[
-    {
-        coords :
-        {
-            x:11,
-            y:10
-        },
-        direction : 0,
-        reloadRate : 5,
-        reloadTick : 0,
-        damage : 50
-    },
-    {
-        coords :
-        {
-            x:10,
-            y:9
-        },
-        direction : 270,
-        reloadRate : 5,
-        reloadTick : 0,
-        damage : 50
-    },
-    {
-        coords :
-        {
-            x:9,
-            y:10
-        },
-        direction : 180,
-        reloadRate : 5,
-        reloadTick : 0,
-        damage : 50
-    },
-    {
-        coords :
-        {
-            x:10,
-            y:11
-        },
-        direction : 90,
-        reloadRate : 5,
-        reloadTick : 0,
-        damage : 50
-    }
-]
-battlefield[10][11].isSolid=1
-battlefield[11][10].isSolid=1
-battlefield[10][9].isSolid=1
-battlefield[9][10].isSolid=1
-
 
 buildingDescription =
 {
     radar :     
     {
-        buildingPattern : zones.crux,
-        color : "blue",
-        actionPattern : zones.radius3
+        drawingMethod : function(x,y)
+        {
+            ctx.beginPath();
+            ctx.rect(x*40+6,y*40+6,30-2,30-2);
+            ctx.fillStyle="blue"; 
+            ctx.fill(); 
+        },
+        action : function(){},
+        actionPattern : zones.crymson
+    },
+    tower :
+    {
+        drawingMethod : function(x,y)
+         {
+            ctx.beginPath();
+            ctx.rect(x*40+6,y*40+6,30-2,30-2);
+            ctx.fillStyle="green"; 
+            ctx.fill();
+            ctx.beginPath();
+            ctx.rect(x*40+15+8*Math.cos(battlefield[x][y].buildingHeld.direction/180*Math.PI),y*40+15+8*Math.sin(battlefield[x][y].buildingHeld.direction/180*Math.PI),10,10);
+            ctx.fillStyle="black";
+            ctx.fill();
+        },
+        action : function(x,y) // Somehow doesn't feel right
+        {
+            if(battlefield[x][y].poweredByRadar==1 && enemy.length>0)
+            {
+                target = findNearestEnemy(x,y)
+                whereToGo = (180+Math.atan2(y-enemy[target].coords.y-0.35,x-enemy[target].coords.x-0.35)/Math.PI*180)%360
+                if(((battlefield[x][y].buildingHeld.direction - whereToGo)+360)%360 < 180)
+                {
+                    battlefield[x][y].buildingHeld.direction= (battlefield[x][y].buildingHeld.direction-Math.min(10,Math.abs(battlefield[x][y].buildingHeld.direction - whereToGo))+360)%360
+                }
+                else
+                {
+                    battlefield[x][y].buildingHeld.direction= (battlefield[x][y].buildingHeld.direction + Math.min(10,Math.abs(battlefield[x][y].buildingHeld.direction - whereToGo)))%360
+                }
+            }
+
+            battlefield[x][y].buildingHeld.reloadTick--
+            if( battlefield[x][y].buildingHeld.reloadTick<=0 && enemy.length>0)
+            {
+                battlefield[x][y].buildingHeld.reloadTick =  battlefield[x][y].buildingHeld.reloadRate
+                var direction = battlefield[x][y].buildingHeld.direction;
+                var damage = battlefield[x][y].buildingHeld.damage
+                var speed = 0.2;
+                bullets.push(
+                {
+                coords :
+                {
+                    x:x,
+                    y:y
+                },
+                direction:direction ,
+                speed : speed,
+                damage : damage
+                }
+                )
+            }
+        },
+        actionPattern : [],
+        direction : 0,
+        reloadRate : 5,
+        reloadTick : 1,
+        damage : 50
     }
 }
 
+cursor =
+{
+    coords :
+    {
+        x:15,
+        y:5
+    },
+    currentlyHeld : buildingDescription.radar
+}
+
+battlefield[10][11].buildingHeld=create(buildingDescription.tower)
+battlefield[11][10].buildingHeld=create(buildingDescription.tower)
+battlefield[10][9].buildingHeld=create(buildingDescription.tower)
+battlefield[9][10].buildingHeld=create(buildingDescription.tower)
+
+function create(item)               // due to multiplication like so : x= object b ; y = object b; changing x changes also y
+{                                   // Hopefully you won't have to put objects in your objects
+    var plsDontMultiplierino = {};  // If tou actually do, you are screwed.
+    for(i in item)
+    {plsDontMultiplierino[i]=item[i]}
+    return plsDontMultiplierino
+}
 
 function createBattlefield(x,y)
 {
@@ -135,12 +158,11 @@ function createBattlefield(x,y)
             map[i][j] = {
                             poweredByRadar :0,
                             color : 0,
-                            isRadar : 0,
-                            isCanon : 0
+                            buildingHeld : 0
                         }
         }
     }
-    map[10][10]=1
+    map[10][10].color=1 
     return map;
 }
 
@@ -183,21 +205,16 @@ function affBattlefield()
                 ctx.fillStyle="grey"; 
                 ctx.fill();
             }
-            if(battlefield[j][i].isRadar==1)
-            {
-                ctx.beginPath();
-                ctx.rect(j*40+6,i*40+6,30-2,30-2);
-                ctx.fillStyle="blue"; 
-                ctx.fill();
-            }
+            if(battlefield[i][j].buildingHeld)
+                battlefield[i][j].buildingHeld.drawingMethod(i,j)
         }
     }
-    target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,buildingDescription[cursor.currentlyHolded].actionPattern)
+    target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,cursor.currentlyHeld.actionPattern)
     for(var i=0;i!=target.length;i++)
     {
         ctx.beginPath();
         ctx.rect(target[i][0]*40,target[i][1]*40,40,40);
-        ctx.fillStyle="rgba(220, 20, 60, "+((tick%50)/200+0.5)+")" // 211 211 211
+        ctx.fillStyle="rgba(72, 91, 139, "+((tick%50)/200+0.5)+")" // 211 211 211
         ctx.fill();
     }
     for(var i=0;i!=enemy.length;i++)
@@ -211,28 +228,6 @@ function affBattlefield()
         ctx.fillStyle="black"; 
         ctx.fill();
     }
-    for(var i=0;i!=canon.length;i++)
-    {
-        ctx.beginPath();
-        ctx.rect(canon[i].coords.x*40+6,canon[i].coords.y*40+6,30-2,30-2);
-        ctx.fillStyle="green"; 
-        ctx.fill();
-        ctx.beginPath();
-        ctx.rect(canon[i].coords.x*40+15+8*Math.cos(canon[i].direction/180*Math.PI),canon[i].coords.y*40+15+8*Math.sin(canon[i].direction/180*Math.PI),10,10);
-        ctx.fillStyle="black"; 
-        ctx.fill();
-    }
-    //for(var i=0;i!=radar.length;i++)
-    //    for(var j=0;j!=radar.length;j++)
-    //    {
-    //        if(Math.sqrt(Math.pow(radar[i].coords.x,2)+Math.pow(radar[i].coords.y,2)-(Math.pow(radar[j].coords.x,2)+Math.pow(radar[j].coords.y,2)))<=1)
-    //        {
-    //            ctx.beginPath();
-    //            ctx.rect(radar[i].coords.x*40+6,radar[i].coords.y*40+6,30-2,30-2);
-    //            ctx.fillStyle="blue"; 
-    //            ctx.fill();
-    //        }
-    //    }
 
     for(var i=0;i!=bullets.length;i++)
     {
@@ -250,33 +245,33 @@ function affBattlefield()
             ctx.rect(particles[i].coords.x*40+15,particles[i].coords.y*40+15,10,10)
         ctx.fillStyle=particles[i].color; 
         ctx.fill();
-        /// FIX IT UNTIL YOU MAKE IT
     }
 
-    ctx.beginPath();
-    ctx.rect(cursor.coords.x*40+6,cursor.coords.y*40+6,30-2,30-2);
-    ctx.fillStyle=buildingDescription[cursor.currentlyHolded].color; 
-    ctx.fill();
-    target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,buildingDescription[cursor.currentlyHolded].buildingPattern)
-    for(var i =0;i!=target.length;i++)
-    {
-        if(battlefield[target[i][0]][target[i][1]].isSolid == 1)
-        {
-            for(var j =0;j!=target.length;j++)
-            {
-                ctx.beginPath();
-                ctx.moveTo(target[j][0]*40,target[j][1]*40)
-                ctx.lineTo(target[j][0]*40,target[j][1]*40+40);
-                ctx.lineTo(target[j][0]*40+40,target[j][1]*40+40);
-                ctx.lineTo(target[j][0]*40+40,target[j][1]*40);
-                ctx.lineTo(target[j][0]*40,target[j][1]*40)
-                ctx.strokeStyle="red";
-                ctx.lineWidth = 5;
-                ctx.stroke();
-            }
-            break;
-        }
+    cursor.currentlyHeld.drawingMethod(cursor.coords.x,cursor.coords.y)
+
+    if(battlefield[cursor.coords.x][cursor.coords.y].buildingHeld)
+    {        
+        indicateUnpossiblePlacement(cursor.coords.x,cursor.coords.y)
     }
+}
+
+function indicateUnpossiblePlacement(x,y)
+{
+    ctx.beginPath();
+    ctx.moveTo(x*40,y*40)
+    ctx.lineTo(x*40,y*40+40);
+    ctx.lineTo(x*40+40,y*40+40);
+    ctx.lineTo(x*40+40,y*40);
+    ctx.lineTo(x*40,y*40)
+    ctx.moveTo(x*40+20,y*40)
+    ctx.lineTo(x*40,y*40+20)
+    ctx.moveTo(x*40+40,y*40)
+    ctx.lineTo(x*40,y*40+40)
+    ctx.moveTo(x*40+40,y*40+20)
+    ctx.lineTo(x*40+20,y*40+40)
+    ctx.strokeStyle="red";
+    ctx.lineWidth = 5;
+    ctx.stroke();
 }
 
 function moveEnemies()
@@ -413,49 +408,18 @@ function findNearestEnemy(x,y)
     return target;
 }
 
-function moveCanons()
+function spawnBullets() // Push one level higher later
 {
-    var foundRadar = 0
-    for(var i=0;i!=canon.length;i++)
+    for (var i = 0; i<battlefieldXSize; i++)
     {
-        if(battlefield[canon[i].coords.x][canon[i].coords.y].poweredByRadar==1 && enemy.length>0)
+        for (var j = 0; j<battlefieldYSize; j++)
         {
-            target = findNearestEnemy(canon[i].coords.x,canon[i].coords.y)
-            whereToGo = (180+Math.atan2(canon[i].coords.y-enemy[target].coords.y-0.35,canon[i].coords.x-enemy[target].coords.x-0.35)/Math.PI*180)%360
-            if(((canon[i].direction - whereToGo)+360)%360 < 180)
-                canon[i].direction= (canon[i].direction-Math.min(10,Math.abs(canon[i].direction - whereToGo))+360)%360
-            else
-                canon[i].direction= (canon[i].direction + Math.min(10,Math.abs(canon[i].direction - whereToGo)))%360
-        }
-    }
-}
-
-function spawnBullets()
-{
-    for(var i=0;i!=canon.length;i++)
-    {
-        canon[i].reloadTick--
-        if(canon[i].reloadTick<=0 && enemy.length>0)
-        {
-            canon[i].reloadTick = canon[i].reloadRate
-            //canon[i].direction=(canon[i].direction+45)%360
-            var direction = canon[i].direction;
-            var damage = canon[i].damage
-            var speed = 0.2;
-            bullets.push(
+            if(battlefield[i][j].buildingHeld)
             {
-            coords :
-            {
-                x:canon[i].coords.x,
-                y:canon[i].coords.y
-            },
-            direction:direction ,
-            speed : speed,
-            damage : damage
+                battlefield[i][j].buildingHeld.action(i,j)
             }
-            )
         }
-    }
+    }   
 }  
 
 function renderBulletsCollision()
@@ -520,23 +484,23 @@ function place( item, x, y, zone )
         y0 = y+zone[i+1];
         if (x0>=0 && x0<=20 && y0>=0 && y0<=20)
             battlefield[x0][y0][item] = 1;
-        console.log("Property placed")
-        console.log(x0,y0)
     }
+}
+
+function placeBuilding( item, x, y )
+{
+    battlefield[x][y].buildingHeld = item;
 }
 
 function placeRadar(x,y)
 {
     place( "poweredByRadar", cursor.coords.x,cursor.coords.y, buildingDescription.radar.actionPattern );
-    place("isRadar", cursor.coords.x,cursor.coords.y, buildingDescription.radar.buildingPattern )
-    place("isSolid", cursor.coords.x,cursor.coords.y, buildingDescription.radar.buildingPattern )
-    console.log("doned")
+    placeBuilding(buildingDescription.radar, cursor.coords.x,cursor.coords.y)
 }
 function mainLoop()
 {
     tick++;
     spawnEnemies();
-    moveCanons()
     spawnBullets();
     moveEnemies();
     moveBullets();
@@ -588,7 +552,10 @@ function checkKey(e) {
     }
     else if (e.keyCode == '13')
     {
-        placeRadar(cursor.coords.x,cursor.coords.y);
+        if(!battlefield[cursor.coords.x][cursor.coords.y].buildingHeld)
+        {
+            placeRadar(cursor.coords.x,cursor.coords.y);
+        }
     }
     else if (e.keyCode == '76')
     {
