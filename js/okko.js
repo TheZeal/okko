@@ -13,71 +13,76 @@ var zones =
     dot : [0,0],
     crux : [0,0,-1,0,1,0,0,-1,0,1],
     radius3 : [0,-2,1,1,2,0,1,-1,0,2,-1,1,-2,0,-1,-1],
-    crymson : [3,0,2,2,0,3,0,-3,-3,0,-2,-2,2,-2,-2,2]
+    crymson : [3,0,2,2,0,3,0,-3,-3,0,-2,-2,2,-2,-2,2],
+    knight : [-2,1,-2,-1,-1,2,-1,-2,2,1,2,-1,1,2,1,-2]
 };
 
 var started = 0
 var testmode = 0
 var tick = 0;
-battlefield = createBattlefield(21,21)
+var battlefield = createBattlefield(21,21)
 
-enemy = 
-[
-    {
-        name : "cestunetrappe",
-        hp:100,
-        coords :
-        {
-            x:5,
-            y:5
-        },
-        direction : 45,
-        speed : 0.1
-    },
-    {
-        name : "cestunetrappe2",
-        hp:100,
-        coords :
-        {
-            x:8,
-            y:10.5
-        },
-        direction : 45,
-        speed : 0.1
-    } 
-]
+function drawSquare(x,y,size,color)
+{
+    ctx.beginPath();
+    ctx.rect(x*40+(40-size)/2,y*40+(40-size)/2,size,size);
+    ctx.fillStyle=color; 
+    ctx.fill(); 
+}
+
 enemy = []
-
 bullets = []
-
 particles = []
 
 buildingDescription =
 {
     radar :     
     {
+        name : "radar",
         drawingMethod : function(x,y)
         {
-            ctx.beginPath();
-            ctx.rect(x*40+6,y*40+6,30-2,30-2);
-            ctx.fillStyle="blue"; 
-            ctx.fill(); 
+            drawSquare(x,y,28,"blue")
         },
         action : function(){},
+        placeMe : function(x,y) // argh
+        {
+            place( "poweredByRadar", x,y, buildingDescription.radar.actionPattern );
+            placeBuilding(buildingDescription.radar, x,y)
+        },
         actionPattern : zones.crymson
+    },
+    accelerator:
+    {
+        name : "accelerator",
+        drawingMethod : function(x,y)
+        {
+            drawSquare(x,y,28,"yellow")
+        },
+        action : function(){},
+        placeMe : function(x,y) //redondant
+        {
+            placeBuilding(buildingDescription.accelerator, x,y) // argh
+            target = makeBulidingAOE(x,y,cursor.currentlyHeld.actionPattern) // argh
+            for(var i=0;i!=target.length;i++)
+            {
+                if(battlefield[target[i][0]][target[i][1]].buildingHeld)
+                    if(battlefield[target[i][0]][target[i][1]].buildingHeld.name == "tower")
+                    {
+                        battlefield[target[i][0]][target[i][1]].buildingHeld.reloadRate-=5
+                        if(battlefield[target[i][0]][target[i][1]].buildingHeld.reloadRate<=0)
+                            battlefield[target[i][0]][target[i][1]].buildingHeld.reloadRate=1
+                    }
+            }
+        },
+        actionPattern : zones.knight
     },
     tower :
     {
+        name : "tower",
         drawingMethod : function(x,y)
          {
-            ctx.beginPath();
-            ctx.rect(x*40+6,y*40+6,30-2,30-2);
-            ctx.fillStyle="green"; 
-            ctx.fill();
-            ctx.beginPath();
-            ctx.rect(x*40+15+8*Math.cos(battlefield[x][y].buildingHeld.direction/180*Math.PI),y*40+15+8*Math.sin(battlefield[x][y].buildingHeld.direction/180*Math.PI),10,10);
-            ctx.fillStyle="black";
-            ctx.fill();
+            drawSquare(x,y,28,"green")
+            drawSquare(x+Math.cos(battlefield[x][y].buildingHeld.direction/180*Math.PI)/4.5,y+Math.sin(battlefield[x][y].buildingHeld.direction/180*Math.PI)/4.5,10,"black")
         },
         action : function(x,y) // Somehow doesn't feel right
         {
@@ -101,7 +106,7 @@ buildingDescription =
                 battlefield[x][y].buildingHeld.reloadTick =  battlefield[x][y].buildingHeld.reloadRate
                 var direction = battlefield[x][y].buildingHeld.direction;
                 var damage = battlefield[x][y].buildingHeld.damage
-                var speed = 0.2;
+                var speed = 0.5+Math.random()/2;
                 bullets.push(
                 {
                 coords :
@@ -116,9 +121,13 @@ buildingDescription =
                 )
             }
         },
+        placeMe : function(x,y) // argh
+        {
+            battlefield[x][y].buildingHeld=create(buildingDescription.tower) // and should look for EVERY EFFECT THAT COULD POSSIBLY BE ON THAT TILE.
+        },
         actionPattern : [],
         direction : 0,
-        reloadRate : 5,
+        reloadRate : 20,
         reloadTick : 1,
         damage : 50
     }
@@ -134,10 +143,10 @@ cursor =
     currentlyHeld : buildingDescription.radar
 }
 
-battlefield[10][11].buildingHeld=create(buildingDescription.tower)
-battlefield[11][10].buildingHeld=create(buildingDescription.tower)
-battlefield[10][9].buildingHeld=create(buildingDescription.tower)
-battlefield[9][10].buildingHeld=create(buildingDescription.tower)
+battlefield[10][13].buildingHeld=create(buildingDescription.tower)
+battlefield[13][10].buildingHeld=create(buildingDescription.tower)
+battlefield[10][7].buildingHeld=create(buildingDescription.tower)
+battlefield[7][10].buildingHeld=create(buildingDescription.tower)
 
 function create(item)               // due to multiplication like so : x= object b ; y = object b; changing x changes also y
 {                                   // Hopefully you won't have to put objects in your objects
@@ -193,17 +202,11 @@ function affBattlefield()
 
             if(battlefield[j][i].color==0)
             {
-                ctx.beginPath();
-                ctx.rect(i*40+1,j*40+1,40-2,40-2);
-                ctx.fillStyle="white";
-                ctx.fill();
+                drawSquare(i,j,38,"white")
             }
             else
             {
-                ctx.beginPath();
-                ctx.rect(i*40+1,j*40+1,40-2,40-2);
-                ctx.fillStyle="grey"; 
-                ctx.fill();
+                drawSquare(i,j,38,"grey")
             }
             if(battlefield[i][j].buildingHeld)
                 battlefield[i][j].buildingHeld.drawingMethod(i,j)
@@ -212,39 +215,21 @@ function affBattlefield()
     target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,cursor.currentlyHeld.actionPattern)
     for(var i=0;i!=target.length;i++)
     {
-        ctx.beginPath();
-        ctx.rect(target[i][0]*40,target[i][1]*40,40,40);
-        ctx.fillStyle="rgba(72, 91, 139, "+((tick%50)/200+0.5)+")" // 211 211 211
-        ctx.fill();
+        drawSquare(target[i][0],target[i][1],38,"rgba(72, 91, 139, "+((tick%50)/200+0.5)+")")
     }
     for(var i=0;i!=enemy.length;i++)
     {
-        ctx.beginPath();
-        ctx.rect(enemy[i].coords.x*40+6,enemy[i].coords.y*40+6,30-2,30-2);
-        ctx.fillStyle="red"; 
-        ctx.fill();
-        ctx.beginPath();
-        ctx.rect(enemy[i].coords.x*40+15+8*Math.cos(enemy[i].direction/180*Math.PI),enemy[i].coords.y*40+15+8*Math.sin(enemy[i].direction/180*Math.PI),10,10);
-        ctx.fillStyle="black"; 
-        ctx.fill();
+        drawSquare(enemy[i].coords.x,enemy[i].coords.y,28,"red")
+        drawSquare(enemy[i].coords.x+Math.cos(enemy[i].direction/180*Math.PI)/4.5,enemy[i].coords.y+Math.sin(enemy[i].direction/180*Math.PI)/4.5,10,"black")
     }
 
     for(var i=0;i!=bullets.length;i++)
     {
-        ctx.beginPath();
-        ctx.rect(bullets[i].coords.x*40+16,bullets[i].coords.y*40+16,8,8);
-        ctx.fillStyle="black"; 
-        ctx.fill();
+        drawSquare(bullets[i].coords.x,bullets[i].coords.y,8,"black")
     } 
     for(var i=0;i!=particles.length;i++)
     {
-        ctx.beginPath();
-        if(particles[i].color=="red")
-            ctx.rect(particles[i].coords.x*40+13,particles[i].coords.y*40+13,14,14);
-        else
-            ctx.rect(particles[i].coords.x*40+15,particles[i].coords.y*40+15,10,10)
-        ctx.fillStyle=particles[i].color; 
-        ctx.fill();
+        drawSquare(particles[i].coords.x,particles[i].coords.y,particles[i].color=="red"?14:10,particles[i].color)
     }
 
     cursor.currentlyHeld.drawingMethod(cursor.coords.x,cursor.coords.y)
@@ -322,7 +307,7 @@ function moveParticles()
 
 function spawnEnemies()
 {
-    while (Math.random()<0.15 && started==1)
+    while (Math.random()<0.04 && started==1)
     {
         var x = Math.random()*20;
         var y = Math.random()<0.5?0:20;
@@ -337,7 +322,7 @@ function spawnEnemies()
         enemy.push(
         {        
             name : "justspawned",
-            hp:100,
+            hp:200,
             coords :
             {
                 x:x,
@@ -408,7 +393,7 @@ function findNearestEnemy(x,y)
     return target;
 }
 
-function spawnBullets() // Push one level higher later
+function renderBattlefield() // Push one level higher later
 {
     for (var i = 0; i<battlefieldXSize; i++)
     {
@@ -478,7 +463,7 @@ function renderBulletsCollision()
 
 function place( item, x, y, zone )
 {
-    for (i=0;i<zone.length;i+=2)
+    for (var i=0;i<zone.length;i+=2)
     {
         x0 = x+zone[i];
         y0 = y+zone[i+1];
@@ -497,17 +482,33 @@ function placeRadar(x,y)
     place( "poweredByRadar", cursor.coords.x,cursor.coords.y, buildingDescription.radar.actionPattern );
     placeBuilding(buildingDescription.radar, cursor.coords.x,cursor.coords.y)
 }
+var lastDate = new Date();
+var max = 0;
 function mainLoop()
 {
-    tick++;
-    spawnEnemies();
-    spawnBullets();
-    moveEnemies();
-    moveBullets();
-    moveParticles();
-    renderBulletsCollision()
-    affBattlefield();
+    var newDate = new Date();
+    ms = newDate-lastDate;
+    lastDate = newDate;
+    if (ms>max)
+        max = ms;
+
     requestID = window.requestAnimationFrame(mainLoop);
+    {
+        tick++;
+        spawnEnemies();
+        renderBattlefield();
+        renderBulletsCollision()
+        moveEnemies();
+        moveBullets();
+        moveParticles();
+        affBattlefield();
+    }
+    ctx.fillText(""+max,10,10);
+    ctx.fillText(""+ms,10,30);
+    ctx.fillText(""+Math.floor(1000/ms),10,50);
+    ctx.fillText(""+Math.floor(1000/max),10,70);
+    if ((tick%300)==0)
+        max = 0;
 }
 
 function cursorUp()
@@ -554,7 +555,7 @@ function checkKey(e) {
     {
         if(!battlefield[cursor.coords.x][cursor.coords.y].buildingHeld)
         {
-            placeRadar(cursor.coords.x,cursor.coords.y);
+            cursor.currentlyHeld.placeMe(cursor.coords.x,cursor.coords.y)
         }
     }
     else if (e.keyCode == '76')
@@ -565,10 +566,18 @@ function checkKey(e) {
     {
         testmode=1;
     }
-
-
-    //affBattlefield()
+        else if (e.keyCode == '82')
+    {
+        cursor.currentlyHeld=buildingDescription.radar;
+    }
+    else if (e.keyCode == '65')
+    {
+        cursor.currentlyHeld=buildingDescription.accelerator;
+    }
+    else if (e.keyCode == '81')
+    {
+        cursor.currentlyHeld=buildingDescription.tower;
+    }
 }
 
-//affBattlefield();
 requestID = window.requestAnimationFrame(mainLoop);
