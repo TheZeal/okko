@@ -26,135 +26,127 @@ function drawSquare(x,y,size,color)
 {
     ctx.beginPath();
     ctx.rect(x*40+(40-size)/2,y*40+(40-size)/2,size,size);
-    ctx.fillStyle=color; 
-    ctx.fill(); 
+    ctx.fillStyle=color;
+    ctx.fill();
 }
 
 enemy = []
 bullets = []
 particles = []
 
+cursorDescription =
+{
+    radar : function(x,y){ drawSquare(x,y,28,"blue") },
+    accelerator : function(x,y) { drawSquare(x,y,28,"yellow") },
+    tower : function(x,y) { drawSquare(x,y,28,"green"), drawSquare(x+1/4.5,y,10,"black") }
+}
+
+cursorDescription_zones = 
+{
+    radar : zones.crymson,
+    accelerator : zones.knight,
+    tower : []
+}
+
 buildingDescription =
 {
-    radar :     
+    radar : function(tile, x, y)    
     {
-        name : "radar",
-        drawingMethod : function(x,y)
+        console.log("CALLED")
+        tile.name = "radar"
+        tile.drawingMethod = function()
         {
             drawSquare(x,y,28,"blue")
-        },
-        action : function(){},
-        placeMe : function(x,y) // argh
-        {
-            place( "poweredByRadar", x,y, buildingDescription.radar.actionPattern );
-            placeBuilding(buildingDescription.radar, x,y)
-        },
-        actionPattern : zones.crymson
+        }
+        place( "poweredByRadar", x,y, zones.crymson );
+        tile.actionPattern = zones.crymson
     },
-    accelerator:
+    accelerator : function(tile, x, y)
     {
-        name : "accelerator",
-        drawingMethod : function(x,y)
+        tile.name = "accelerator"
+        tile.drawingMethod = function()
         {
             drawSquare(x,y,28,"yellow")
-        },
-        action : function(){},
-        placeMe : function(x,y) //redondant
+        }
+        var target = makeBuildingAOE(x,y,zones.knight)
+        for(var i=0;i!=target.length;i++) // TODO : would you kindly create a proper function like place
         {
-            placeBuilding(buildingDescription.accelerator, x,y) // argh
-            target = makeBulidingAOE(x,y,cursor.currentlyHeld.actionPattern) // argh
-            for(var i=0;i!=target.length;i++)
-            {
-                if(battlefield[target[i][0]][target[i][1]].buildingHeld)
-                    if(battlefield[target[i][0]][target[i][1]].buildingHeld.name == "tower")
-                    {
-                        battlefield[target[i][0]][target[i][1]].buildingHeld.reloadRate-=5
-                        if(battlefield[target[i][0]][target[i][1]].buildingHeld.reloadRate<=0)
-                            battlefield[target[i][0]][target[i][1]].buildingHeld.reloadRate=1
-                    }
-            }
-        },
-        actionPattern : zones.knight
+            battlefield[target[i][0]][target[i][1]].reloadModifier+=5
+        }
+        tile.actionPattern = zones.knight
     },
-    tower :
+    tower : function(tile, x, y)
     {
-        name : "tower",
-        drawingMethod : function(x,y)
-         {
-            drawSquare(x,y,28,"green")
-            drawSquare(x+Math.cos(battlefield[x][y].buildingHeld.direction/180*Math.PI)/4.5,y+Math.sin(battlefield[x][y].buildingHeld.direction/180*Math.PI)/4.5,10,"black")
-        },
-        action : function(x,y) // Somehow doesn't feel right
+        tile.name = "tower"
+        tile.drawingMethod = function()
         {
-            if(battlefield[x][y].poweredByRadar==1 && enemy.length>0)
+            drawSquare(x,y,28,"green")
+            drawSquare(x+Math.cos(tile.direction/180*Math.PI)/4.5,y+Math.sin(tile.direction/180*Math.PI)/4.5,10,"black")
+        }
+        tile.action = function()
+        {
+            if(tile.poweredByRadar==1 && enemy.length>0)
             {
-                target = findNearestEnemy(x,y)
-                whereToGo = (180+Math.atan2(y-enemy[target].coords.y-0.35,x-enemy[target].coords.x-0.35)/Math.PI*180)%360
-                if(((battlefield[x][y].buildingHeld.direction - whereToGo)+360)%360 < 180)
+                var target = findNearestEnemy(x,y)
+                var whereToGo = (180+Math.atan2(y-enemy[target].coords.y-0.35,x-enemy[target].coords.x-0.35)/Math.PI*180)%360
+                if(((tile.direction - whereToGo)+360)%360 < 180)
                 {
-                    battlefield[x][y].buildingHeld.direction= (battlefield[x][y].buildingHeld.direction-Math.min(10,Math.abs(battlefield[x][y].buildingHeld.direction - whereToGo))+360)%360
+                    tile.direction= (tile.direction-Math.min(10,Math.abs(tile.direction - whereToGo))+360)%360
                 }
                 else
                 {
-                    battlefield[x][y].buildingHeld.direction= (battlefield[x][y].buildingHeld.direction + Math.min(10,Math.abs(battlefield[x][y].buildingHeld.direction - whereToGo)))%360
+                    tile.direction= (tile.direction + Math.min(10,Math.abs(tile.direction - whereToGo)))%360
                 }
             }
 
-            battlefield[x][y].buildingHeld.reloadTick--
-            if( battlefield[x][y].buildingHeld.reloadTick<=0 && enemy.length>0)
+            tile.reloadTick--
+            if( tile.reloadTick<=0 && enemy.length>0)
             {
-                battlefield[x][y].buildingHeld.reloadTick =  battlefield[x][y].buildingHeld.reloadRate
-                var direction = battlefield[x][y].buildingHeld.direction;
-                var damage = battlefield[x][y].buildingHeld.damage
+                tile.reloadTick =  Math.max(tile.reloadRate - tile.reloadModifier,1)
+                var direction = tile.direction;
+                var damage = tile.damage
                 var speed = 0.5+Math.random()/2;
-                bullets.push(
+                bullets.push( // PUT IN PROPER FUNCTION LATER // 
                 {
                 coords :
                 {
                     x:x,
                     y:y
                 },
-                direction:direction ,
+                direction: direction ,
                 speed : speed,
                 damage : damage
                 }
                 )
             }
-        },
-        placeMe : function(x,y) // argh
-        {
-            battlefield[x][y].buildingHeld=create(buildingDescription.tower) // and should look for EVERY EFFECT THAT COULD POSSIBLY BE ON THAT TILE.
-        },
-        actionPattern : [],
-        direction : 0,
-        reloadRate : 20,
-        reloadTick : 1,
-        damage : 50
+        }
+        tile.actionPattern = []
+        tile.direction = 0
+        tile.reloadRate = 20
+        tile.reloadTick = 1
+        tile.damage = 50
     }
 }
 
-cursor =
+buildingDescription.tower(battlefield[10][13],10,13)
+buildingDescription.tower(battlefield[13][10],13,10)
+buildingDescription.tower(battlefield[10][7],10,7)
+buildingDescription.tower(battlefield[7][10],7,10)
+//buildingDescription.radar(battlefield[10][10],10,10)
+
+var cursor =
 {
     coords :
     {
         x:15,
         y:5
     },
-    currentlyHeld : buildingDescription.radar
+    held : buildingDescription.radar,
+    description : cursorDescription.radar,
+    zone : cursorDescription_zones.radar
 }
+console.log(cursor)
 
-battlefield[10][13].buildingHeld=create(buildingDescription.tower)
-battlefield[13][10].buildingHeld=create(buildingDescription.tower)
-battlefield[10][7].buildingHeld=create(buildingDescription.tower)
-battlefield[7][10].buildingHeld=create(buildingDescription.tower)
-
-function create(item)               // due to multiplication like so : x= object b ; y = object b; changing x changes also y
-{                                   // Hopefully you won't have to put objects in your objects
-    var plsDontMultiplierino = {};  // If tou actually do, you are screwed.
-    for(i in item)
-    {plsDontMultiplierino[i]=item[i]}
-    return plsDontMultiplierino
-}
 
 function createBattlefield(x,y)
 {
@@ -164,18 +156,25 @@ function createBattlefield(x,y)
         map[i] = [];
         for (var j = 0; j < y; j++)
         {
-            map[i][j] = {
-                            poweredByRadar :0,
-                            color : 0,
-                            buildingHeld : 0
+            map[i][j] = { //TODO : would you kindly separate this into two distincts lists for premanent and non permanent modifications
+                            name : "blank",
+                            poweredByRadar : 0,
+                            color : "white",
+                            action : function(){},
+                            actionPattern : [],
+                            direction : 0,
+                            reloadRate : 0,
+                            reloadTick : 0,
+                            damage : 0,
+                            reloadModifier : 0
                         }
         }
     }
-    map[10][10].color=1 
+    map[10][10].color="grey" 
     return map;
 }
 
-function makeBulidingAOE(x, y, zone )
+function makeBuildingAOE(x, y, zone )
 {
     var whatToPaint = []
     for (i=0;i<zone.length;i+=2)
@@ -199,20 +198,12 @@ function affBattlefield()
     {
         for (var j = 0; j<battlefieldYSize; j++)
         {
-
-            if(battlefield[j][i].color==0)
-            {
-                drawSquare(i,j,38,"white")
-            }
-            else
-            {
-                drawSquare(i,j,38,"grey")
-            }
-            if(battlefield[i][j].buildingHeld)
-                battlefield[i][j].buildingHeld.drawingMethod(i,j)
+            drawSquare(i,j,38,battlefield[i][j].color)
+            if(battlefield[i][j].name !=  "blank")
+                battlefield[i][j].drawingMethod(i,j)
         }
     }
-    target = makeBulidingAOE(cursor.coords.x,cursor.coords.y,cursor.currentlyHeld.actionPattern)
+    target = makeBuildingAOE(cursor.coords.x,cursor.coords.y,cursor.zone)
     for(var i=0;i!=target.length;i++)
     {
         drawSquare(target[i][0],target[i][1],38,"rgba(72, 91, 139, "+((tick%50)/200+0.5)+")")
@@ -232,9 +223,9 @@ function affBattlefield()
         drawSquare(particles[i].coords.x,particles[i].coords.y,particles[i].color=="red"?14:10,particles[i].color)
     }
 
-    cursor.currentlyHeld.drawingMethod(cursor.coords.x,cursor.coords.y)
+    cursor.description(cursor.coords.x,cursor.coords.y)
 
-    if(battlefield[cursor.coords.x][cursor.coords.y].buildingHeld)
+    if(battlefield[cursor.coords.x][cursor.coords.y].name!="blank")
     {        
         indicateUnpossiblePlacement(cursor.coords.x,cursor.coords.y)
     }
@@ -307,7 +298,7 @@ function moveParticles()
 
 function spawnEnemies()
 {
-    while (Math.random()<0.04 && started==1)
+    while (Math.random()<0.2 && started==1)
     {
         var x = Math.random()*20;
         var y = Math.random()<0.5?0:20;
@@ -399,10 +390,7 @@ function renderBattlefield() // Push one level higher later
     {
         for (var j = 0; j<battlefieldYSize; j++)
         {
-            if(battlefield[i][j].buildingHeld)
-            {
-                battlefield[i][j].buildingHeld.action(i,j)
-            }
+            battlefield[i][j].action(i,j)
         }
     }   
 }  
@@ -461,7 +449,7 @@ function renderBulletsCollision()
     }
 }
 
-function place( item, x, y, zone )
+function place(item, x, y, zone )
 {
     for (var i=0;i<zone.length;i+=2)
     {
@@ -553,9 +541,10 @@ function checkKey(e) {
     }
     else if (e.keyCode == '13')
     {
-        if(!battlefield[cursor.coords.x][cursor.coords.y].buildingHeld)
+        if(battlefield[cursor.coords.x][cursor.coords.y].name=="blank")
         {
-            cursor.currentlyHeld.placeMe(cursor.coords.x,cursor.coords.y)
+            cursor.held(battlefield[cursor.coords.x][cursor.coords.y],cursor.coords.x,cursor.coords.y)
+
         }
     }
     else if (e.keyCode == '76')
@@ -568,15 +557,21 @@ function checkKey(e) {
     }
         else if (e.keyCode == '82')
     {
-        cursor.currentlyHeld=buildingDescription.radar;
+        cursor.held=buildingDescription.radar;
+        cursor.description = cursorDescription.radar
+        cursor.zone = cursorDescription_zones.radar
     }
     else if (e.keyCode == '65')
     {
-        cursor.currentlyHeld=buildingDescription.accelerator;
+        cursor.held=buildingDescription.accelerator;
+        cursor.description = cursorDescription.accelerator
+        cursor.zone = cursorDescription_zones.accelerator
     }
     else if (e.keyCode == '81')
     {
-        cursor.currentlyHeld=buildingDescription.tower;
+        cursor.held=buildingDescription.tower;
+        cursor.description = cursorDescription.tower
+        cursor.zone = cursorDescription_zones.tower
     }
 }
 
